@@ -71,6 +71,26 @@ def _drift(board: chess.Board, target_result: str) -> tuple[bool, str]:
     return user_result != target_result, user_result
 
 
+def _refutation_line(board: chess.Board, max_plies: int = 4) -> list[str]:
+    """A short tablebase-best continuation from `board`, for showing *why* a
+    drifted position is worse - not just that it drifted. Stops early on
+    game over or once the tablebase has nothing (shouldn't happen mid-line).
+    Inspired by other own-games trainers (e.g. fernandops21/chess_trainer's
+    'wrong move refutation') showing the follow-up, not just the verdict."""
+    line = []
+    b = board.copy()
+    for _ in range(max_plies):
+        if b.is_game_over():
+            break
+        uci = tablebase.best_move_uci(b.fen())
+        if uci is None:
+            break
+        move = chess.Move.from_uci(uci)
+        line.append(b.san(move))
+        b.push(move)
+    return line
+
+
 def apply_move(
     conn: sqlite3.Connection, lesson_id: str, fen: str, uci: str, moves_so_far: list[str]
 ) -> dict:
@@ -120,11 +140,15 @@ def apply_move(
         _log_attempt(conn, lesson_id, passed, moves)
 
     drifted, current_target = (False, lesson["target_result"])
+    refutation: list[str] = []
     if not game_over:
         drifted, current_target = _drift(board, lesson["target_result"])
+        if drifted:
+            refutation = _refutation_line(board)
 
     return {
         "fen": board.fen(),
+        "refutation": refutation,
         "user_san": user_san,
         "user_uci": uci,
         "opponent_san": opponent_san,

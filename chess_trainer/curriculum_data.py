@@ -153,6 +153,31 @@ LESSONS = [
         start_fen="4k3/8/8/8/8/8/8/2B2BK1 w - - 0 1",
         exercise_type="tablebase_dtz",
     ),
+    dict(
+        id="u2-04", unit=2, seq=4,
+        title="King, bishop and knight vs king",
+        objective=(
+            "White to move. The hardest of the 'basic' mates - the king must be driven "
+            "specifically into the corner that matches the bishop's color, and getting it "
+            "there without stalemating or losing the win is notoriously easy to botch. "
+            "Unlike the two-bishop mate, there's no shortcut: take your time."
+        ),
+        start_fen="4k3/8/8/8/3NK3/8/8/5B2 w - - 0 1",
+        exercise_type="tablebase_dtz",
+    ),
+    dict(
+        id="u2-05", unit=2, seq=5,
+        title="Two knights vs king — the mate that doesn't exist",
+        objective=(
+            "White to move, up two knights against a lone king. It looks overwhelming, "
+            "and intuition says it should work like the two-bishop or bishop-and-knight "
+            "mates - but with no pawn to exploit zugzwang, two knights alone can never "
+            "force checkmate against correct defense. Play it out and watch the win "
+            "evaporate; this is the one 'basic mate' that's actually just a draw."
+        ),
+        start_fen="4k3/8/8/8/8/2N2N2/8/4K3 w - - 0 1",
+        exercise_type="tablebase_dtz",
+    ),
 
     # --- Unit 3: Rook endings ---
     dict(
@@ -188,6 +213,19 @@ LESSONS = [
             "shields the checks and pushes the pawn home."
         ),
         start_fen="k7/6K1/6P1/8/2r5/8/8/7R w - - 0 1",
+        exercise_type="tablebase_dtz",
+    ),
+    dict(
+        id="u3-04", unit=3, seq=4,
+        title="Extra pawn, blockaded — when 'rook behind the pawn' isn't enough",
+        objective=(
+            "White to move, up a clean pawn with the rook correctly placed behind it. It "
+            "looks winning, but Black's king has reached the one square that matters: "
+            "directly in front of the pawn. Try to make progress and see why that exact "
+            "blockade - not just 'rook behind the pawn' - is the real drawing technique "
+            "in rook endings."
+        ),
+        start_fen="1r6/4k3/8/4P3/4K3/8/8/4R3 w - - 0 1",
         exercise_type="tablebase_dtz",
     ),
 

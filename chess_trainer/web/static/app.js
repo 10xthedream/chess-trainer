@@ -463,6 +463,7 @@ async function renderLesson(lessonId) {
   const userColor = lesson.user_is_white ? "white" : "black";
 
   const statusLine = el("div", { class: "position-meta" }, `Theoretical result: ${lesson.target_result} for you. Your move.`);
+  const refutationLine = el("div", { class: "muted" }, "");
   const moveLog = el("div", { class: "muted" }, "");
   const boardWrap = el("div", { class: "board-wrap" });
   const promoWrap = el("div", { class: "promo-picker hidden" });
@@ -472,7 +473,7 @@ async function renderLesson(lessonId) {
 
   root.appendChild(el("div", { class: "review-layout" }, [
     el("div", { class: "board-col" }, [boardWrap, promoWrap]),
-    el("div", { class: "form-col" }, [statusLine, moveLog, actionsRow]),
+    el("div", { class: "form-col" }, [statusLine, refutationLine, moveLog, actionsRow]),
   ]));
 
   const cg = Chessground(boardWrap, {
@@ -542,6 +543,11 @@ async function renderLesson(lessonId) {
         : statusLine.textContent;
       if (result.drifted && !result.game_over) {
         statusLine.textContent += ` (Position has drifted to a theoretical ${result.current_target} for you.)`;
+        refutationLine.textContent = result.refutation.length
+          ? `Why: ${result.refutation.join(" ")} ...`
+          : "";
+      } else {
+        refutationLine.textContent = "";
       }
       if (result.game_over) setDone(result);
     } catch (e) {
