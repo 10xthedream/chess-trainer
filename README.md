@@ -75,6 +75,16 @@ fully interactive - drag or click-to-move, same legal-move highlighting as a
 normal chess site - via the vendored chessground board, with the opponent's
 replies and pass/fail grading computed server-side against the live Lichess
 tablebase (same logic as the CLI's `curriculum-practice`, not reimplemented).
+A **Hint** button shows the current position's best move as an arrow without
+playing it for you; drifting off the lesson's target result shows a short
+"why" continuation, not just a warning.
+
+The own-blunder drill loop also has a web screen now (**Drill your mistakes**
+on the curriculum page, same interactive board) - click/drag the move you
+should have played instead of your flagged mistake, graded live. Three of the
+Unit 7-8 "review" lessons (development tempo, king safety) link straight to a
+drill session scoped to that exact root-cause tag instead of asking you to
+manually review your own games.
 Review-lesson units (6-8) just show their text.
 
 Own-blunder drill loop (FSRS):
