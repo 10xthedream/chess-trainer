@@ -37,19 +37,27 @@ FAST_SOLVE_SECONDS = 5.0     # solved correctly this fast on a card's first rep 
 _SCHEDULER = fsrs.Scheduler()
 
 
-def build_cards(conn: sqlite3.Connection, config: Config, on_progress=None) -> int:
+def build_cards(conn: sqlite3.Connection, config: Config, on_progress=None, eco: str | None = None) -> int:
     """Turns newly flagged blunders/mistakes into drill cards. Computes the
     engine's best move once per card at build time so review itself stays
-    fast. Resumable: positions that already have a card are skipped."""
-    rows = conn.execute(
-        """
+    fast. Resumable: positions that already have a card are skipped.
+
+    `eco`, if given, scopes this to just games with that ECO code (e.g. 'C45'
+    for the Scotch) - for building a focused deck around one opening instead
+    of the whole historical backlog at once."""
+    query = """
         SELECT p.game_id, p.ply, p.fen_before
         FROM positions p
+        JOIN games g ON g.id = p.game_id
         WHERE p.is_my_move = 1 AND p.severity IN ('blunder', 'mistake')
           AND NOT EXISTS (SELECT 1 FROM cards c WHERE c.game_id = p.game_id AND c.ply = p.ply)
-        ORDER BY p.game_id, p.ply
-        """
-    ).fetchall()
+    """
+    params: list = []
+    if eco:
+        query += " AND g.eco = ?"
+        params.append(eco)
+    query += " ORDER BY p.game_id, p.ply"
+    rows = conn.execute(query, params).fetchall()
     if not rows:
         return 0
 
@@ -85,8 +93,9 @@ def build_cards(conn: sqlite3.Connection, config: Config, on_progress=None) -> i
     return len(rows)
 
 
-def due_cards(conn: sqlite3.Connection, limit: int | None = None) -> list[sqlite3.Row]:
-    """Cards due now or earlier, soonest-due first."""
+def due_cards(conn: sqlite3.Connection, limit: int | None = None, eco: str | None = None) -> list[sqlite3.Row]:
+    """Cards due now or earlier, soonest-due first. `eco`, if given, scopes
+    to cards from games with that ECO code only (e.g. 'C45')."""
     now = datetime.now(timezone.utc).isoformat()
     query = """
         SELECT c.*, p.fen_before, p.san AS original_san, g.my_colour
@@ -94,9 +103,12 @@ def due_cards(conn: sqlite3.Connection, limit: int | None = None) -> list[sqlite
         JOIN positions p ON p.game_id = c.game_id AND p.ply = c.ply
         JOIN games g ON g.id = c.game_id
         WHERE c.due <= ?
-        ORDER BY c.due
     """
     params: list = [now]
+    if eco:
+        query += " AND g.eco = ?"
+        params.append(eco)
+    query += " ORDER BY c.due"
     if limit:
         query += " LIMIT ?"
         params.append(limit)
@@ -165,15 +177,17 @@ def review_card(
     return rating, card_row["best_move_san"]
 
 
-def drill_session(conn: sqlite3.Connection, config: Config, max_cards: int = 15) -> None:
+def drill_session(conn: sqlite3.Connection, config: Config, max_cards: int = 15, eco: str | None = None) -> None:
     """Interactive CLI drill loop over due cards, mirroring
-    curriculum.practice_lesson's text-based style."""
+    curriculum.practice_lesson's text-based style. `eco`, if given, scopes
+    the session to one opening (e.g. 'C45' for the Scotch)."""
     import time
 
-    cards = due_cards(conn, limit=max_cards)
+    cards = due_cards(conn, limit=max_cards, eco=eco)
     if not cards:
-        print("No cards due right now. Run 'drill-build' first if you haven't, "
-              "or come back later - FSRS spaces these out on purpose.")
+        scope = f" for {eco}" if eco else ""
+        print(f"No cards due right now{scope}. Run 'drill-build{(' ' + eco) if eco else ''}' "
+              f"first if you haven't, or come back later - FSRS spaces these out on purpose.")
         return
 
     print(f"\n{len(cards)} card(s) due. For each, find the move YOU should have "

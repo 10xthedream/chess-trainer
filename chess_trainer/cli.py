@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 
-from . import chesscom, curriculum, drill, report, tag_runner
+from . import chesscom, curriculum, drill, opening_report, report, tag_runner
 from .analyze import analyze_pending_games
 from .config import load_config
 from .db import get_conn, init_db
@@ -106,18 +106,38 @@ def cmd_tag() -> None:
 
 
 def cmd_drill_build() -> None:
+    eco = sys.argv[2] if len(sys.argv) > 2 else None
     config = load_config()
     init_db(config.db_path, default_username=config.chesscom_username)
     with get_conn(config.db_path) as conn:
-        n = drill.build_cards(conn, config, on_progress=lambda i, t: print(f"  {i}/{t}") if i % 10 == 0 else None)
-    print(f"Built {n} new drill card(s) from flagged positions.")
+        n = drill.build_cards(
+            conn, config, eco=eco,
+            on_progress=lambda i, t: print(f"  {i}/{t}") if i % 10 == 0 else None,
+        )
+    scope = f" for {eco}" if eco else ""
+    print(f"Built {n} new drill card(s){scope} from flagged positions.")
 
 
 def cmd_drill() -> None:
+    eco = sys.argv[2] if len(sys.argv) > 2 else None
     config = load_config()
     init_db(config.db_path, default_username=config.chesscom_username)
     with get_conn(config.db_path) as conn:
-        drill.drill_session(conn, config)
+        drill.drill_session(conn, config, eco=eco)
+
+
+def cmd_opening_report() -> None:
+    if len(sys.argv) < 3:
+        print("Usage: python -m chess_trainer.cli opening-report <eco> [colour]")
+        print("  e.g. python -m chess_trainer.cli opening-report C45 white")
+        sys.exit(1)
+    eco = sys.argv[2]
+    colour = sys.argv[3] if len(sys.argv) > 3 else "white"
+    config = load_config()
+    init_db(config.db_path, default_username=config.chesscom_username)
+    with get_conn(config.db_path) as conn:
+        out_path = opening_report.write_opening_report_markdown(conn, config, eco, colour)
+    print(f"Opening report written to:\n  {out_path}")
 
 
 COMMANDS = {
@@ -131,6 +151,7 @@ COMMANDS = {
     "tag": cmd_tag,
     "drill-build": cmd_drill_build,
     "drill": cmd_drill,
+    "opening-report": cmd_opening_report,
 }
 
 
@@ -138,6 +159,9 @@ def main() -> None:
     if len(sys.argv) < 2 or sys.argv[1] not in COMMANDS:
         print(f"Usage: python -m chess_trainer.cli {{{'|'.join(COMMANDS)}}}")
         print("       python -m chess_trainer.cli curriculum-practice <lesson-id>")
+        print("       python -m chess_trainer.cli drill-build [eco]")
+        print("       python -m chess_trainer.cli drill [eco]")
+        print("       python -m chess_trainer.cli opening-report <eco> [colour]")
         sys.exit(1)
     COMMANDS[sys.argv[1]]()
 
