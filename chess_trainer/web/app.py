@@ -14,7 +14,7 @@ from pydantic import BaseModel, field_validator
 
 from ..config import load_config
 from ..db import get_conn, init_db
-from . import jobs, practice, queries
+from . import drill_api, jobs, practice, queries
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -45,6 +45,11 @@ class CreateSessionRequest(BaseModel):
         if not (1 <= v <= 50):
             raise ValueError("n_games must be between 1 and 50")
         return v
+
+
+class DrillReviewRequest(BaseModel):
+    uci: str
+    seconds_spent: float
 
 
 class PracticeMoveRequest(BaseModel):
@@ -195,6 +200,33 @@ def api_lesson_hint(lesson_id: str, fen: str):
     with get_conn(config.db_path) as conn:
         try:
             return practice.hint(conn, lesson_id, fen)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.get("/api/drill/queue")
+def api_drill_queue(eco: str | None = None, tag: str | None = None, limit: int = 15):
+    config = _config()
+    with get_conn(config.db_path) as conn:
+        return drill_api.queue(conn, limit=limit, eco=eco, tag=tag)
+
+
+@app.get("/api/drill/card/{game_id}/{ply}")
+def api_drill_card(game_id: int, ply: int):
+    config = _config()
+    with get_conn(config.db_path) as conn:
+        detail = drill_api.card_detail(conn, game_id, ply)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="No such card.")
+    return detail
+
+
+@app.post("/api/drill/review/{game_id}/{ply}")
+def api_drill_review(game_id: int, ply: int, req: DrillReviewRequest):
+    config = _config()
+    with get_conn(config.db_path) as conn:
+        try:
+            return drill_api.review(conn, config, game_id, ply, req.uci, req.seconds_spent)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc))
 

@@ -93,9 +93,15 @@ def build_cards(conn: sqlite3.Connection, config: Config, on_progress=None, eco:
     return len(rows)
 
 
-def due_cards(conn: sqlite3.Connection, limit: int | None = None, eco: str | None = None) -> list[sqlite3.Row]:
+def due_cards(
+    conn: sqlite3.Connection, limit: int | None = None, eco: str | None = None, tag: str | None = None,
+) -> list[sqlite3.Row]:
     """Cards due now or earlier, soonest-due first. `eco`, if given, scopes
-    to cards from games with that ECO code only (e.g. 'C45')."""
+    to cards from games with that ECO code only (e.g. 'C45'). `tag`, if
+    given, scopes to positions the auto-tagger flagged with that root-cause
+    tag (e.g. 'wasted_tempo') - lets a lesson like "development tempo" link
+    straight to drilling your actual tagged mistakes instead of asking for
+    a manual self-review."""
     now = datetime.now(timezone.utc).isoformat()
     query = """
         SELECT c.*, p.fen_before, p.san AS original_san, g.my_colour
@@ -108,6 +114,11 @@ def due_cards(conn: sqlite3.Connection, limit: int | None = None, eco: str | Non
     if eco:
         query += " AND g.eco = ?"
         params.append(eco)
+    if tag:
+        query += """ AND EXISTS (
+            SELECT 1 FROM error_tags e WHERE e.game_id = c.game_id AND e.ply = c.ply AND e.tag = ?
+        )"""
+        params.append(tag)
     query += " ORDER BY c.due"
     if limit:
         query += " LIMIT ?"
@@ -177,15 +188,18 @@ def review_card(
     return rating, card_row["best_move_san"]
 
 
-def drill_session(conn: sqlite3.Connection, config: Config, max_cards: int = 15, eco: str | None = None) -> None:
+def drill_session(
+    conn: sqlite3.Connection, config: Config, max_cards: int = 15,
+    eco: str | None = None, tag: str | None = None,
+) -> None:
     """Interactive CLI drill loop over due cards, mirroring
-    curriculum.practice_lesson's text-based style. `eco`, if given, scopes
-    the session to one opening (e.g. 'C45' for the Scotch)."""
+    curriculum.practice_lesson's text-based style. `eco`/`tag`, if given,
+    scope the session (e.g. eco='C45' for the Scotch, tag='wasted_tempo')."""
     import time
 
-    cards = due_cards(conn, limit=max_cards, eco=eco)
+    cards = due_cards(conn, limit=max_cards, eco=eco, tag=tag)
     if not cards:
-        scope = f" for {eco}" if eco else ""
+        scope = "".join(f" {k}={v}" for k, v in (("eco", eco), ("tag", tag)) if v)
         print(f"No cards due right now{scope}. Run 'drill-build{(' ' + eco) if eco else ''}' "
               f"first if you haven't, or come back later - FSRS spaces these out on purpose.")
         return

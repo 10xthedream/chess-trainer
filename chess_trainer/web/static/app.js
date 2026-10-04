@@ -52,6 +52,7 @@ function parseHash() {
   if (parts[0] === "s" && parts[2] === "summary") return { screen: "summary", sessionId: +parts[1] };
   if (parts[0] === "lessons" && parts.length === 1) return { screen: "lessons" };
   if (parts[0] === "lessons" && parts.length === 2) return { screen: "lesson", lessonId: parts[1] };
+  if (parts[0] === "drill") return { screen: "drill" };
   return { screen: "start" };
 }
 
@@ -87,6 +88,7 @@ async function render() {
     else if (route.screen === "summary") await renderSummary(route.sessionId);
     else if (route.screen === "lessons") await renderLessons();
     else if (route.screen === "lesson") await renderLesson(route.lessonId);
+    else if (route.screen === "drill") await renderDrill();
   } catch (e) {
     root.innerHTML = "";
     root.appendChild(el("div", { class: "panel" }, [
@@ -402,6 +404,7 @@ async function renderLessons() {
   root.appendChild(el("div", { class: "panel" }, [
     el("div", { class: "btn-row", style: "margin-top:0" }, [
       el("button", { onclick: () => navigate("#/start") }, "← Review"),
+      el("button", { class: "primary", onclick: () => navigate("#/drill") }, "Drill your mistakes →"),
     ]),
     el("h1", {}, "Curriculum"),
   ]));
@@ -440,21 +443,36 @@ function needsPromotion(legalMoves, orig, dest) {
   return legalMoves.some((u) => u.length === 5 && u.slice(0, 2) === orig && u.slice(2, 4) === dest);
 }
 
+// Concept lessons that map cleanly onto one of the auto-tagger's 7 root-cause
+// tags get a real drill link instead of just "go review your own games" -
+// the app already has this data, no reason to make the user do it by hand.
+// The others (pawn structure, open files, center control, named traps) don't
+// have a clean 1:1 tag match yet, so they stay as plain review text.
+const LESSON_DRILL_TAG = { "u8-01": "wasted_tempo", "u7-03": "king_safety", "u8-03": "king_safety" };
+
 async function renderLesson(lessonId) {
   const lesson = await apiGet(`/api/lessons/${lessonId}`);
   root.innerHTML = "";
 
-  root.appendChild(el("div", { class: "panel" }, [
+  const panelChildren = [
     el("div", { class: "btn-row", style: "margin-top:0" }, [
       el("button", { onclick: () => navigate("#/lessons") }, "← Curriculum"),
     ]),
     el("h2", {}, lesson.title),
     el("p", { class: "muted" }, `Unit ${lesson.unit}: ${lesson.unit_name}`),
     el("p", {}, lesson.objective),
-  ]));
+  ];
+  const drillTag = LESSON_DRILL_TAG[lessonId];
+  if (drillTag) {
+    panelChildren.push(el("div", { class: "btn-row" }, [
+      el("button", { class: "primary", onclick: () => navigate(`#/drill?tag=${drillTag}`) },
+        `Drill your "${drillTag}" mistakes →`),
+    ]));
+  }
+  root.appendChild(el("div", { class: "panel" }, panelChildren));
 
   if (lesson.exercise_type !== "tablebase_dtz") {
-    return; // review/concept lesson - the objective text above is the whole lesson
+    return; // review/concept lesson - the objective text (+ drill link above) is the whole lesson
   }
 
   let currentFen = lesson.start_fen;
@@ -575,4 +593,143 @@ async function renderLesson(lessonId) {
       alert(String(e));
     }
   });
+}
+
+// --- Screen 7: Drill - own-blunder FSRS review (same chessground board as curriculum) ---
+
+async function renderDrill() {
+  const params = new URLSearchParams(location.hash.split("?")[1] || "");
+  const eco = params.get("eco");
+  const tag = params.get("tag");
+  const scopeLabel = [eco, tag].filter(Boolean).join(", ");
+
+  const qs = new URLSearchParams();
+  if (eco) qs.set("eco", eco);
+  if (tag) qs.set("tag", tag);
+  const queue = await apiGet(`/api/drill/queue?${qs}`);
+
+  root.innerHTML = "";
+  root.appendChild(el("div", { class: "panel" }, [
+    el("div", { class: "btn-row", style: "margin-top:0" }, [
+      el("button", { onclick: () => navigate("#/lessons") }, "← Curriculum"),
+    ]),
+    el("h1", {}, "Drill"),
+    el("p", { class: "muted" }, scopeLabel ? `Scoped to: ${scopeLabel}` : "All due cards, any opening."),
+  ]));
+
+  if (queue.length === 0) {
+    root.appendChild(el("div", { class: "panel" }, [
+      el("p", {}, `No cards due right now${scopeLabel ? ` for ${scopeLabel}` : ""}.`),
+      el("p", { class: "muted" }, "FSRS spaces these out on purpose - come back later, or try a different filter."),
+    ]));
+    return;
+  }
+
+  let index = 0;
+  const total = queue.length;
+
+  const counterLine = el("div", { class: "muted" }, "");
+  const contextLine = el("div", { class: "position-meta" }, "");
+  const resultLine = el("div", { class: "position-meta" }, "");
+  const boardWrap = el("div", { class: "board-wrap" });
+  const promoWrap = el("div", { class: "promo-picker hidden" });
+  const skipBtn = el("button", {}, "Skip");
+  const nextBtn = el("button", { class: "primary hidden" }, "Next card");
+  const actionsRow = el("div", { class: "btn-row" }, [skipBtn, nextBtn]);
+
+  root.appendChild(el("div", { class: "review-layout" }, [
+    el("div", { class: "board-col" }, [boardWrap, promoWrap]),
+    el("div", { class: "form-col" }, [counterLine, contextLine, resultLine, actionsRow]),
+  ]));
+
+  function pickPromotion() {
+    return new Promise((resolve) => {
+      promoWrap.innerHTML = "";
+      promoWrap.classList.remove("hidden");
+      for (const [code, label] of PROMO_PIECES) {
+        promoWrap.appendChild(el("button", {
+          onclick: () => { promoWrap.classList.add("hidden"); resolve(code); },
+        }, label));
+      }
+    });
+  }
+
+  function loadCard() {
+    resultLine.textContent = "";
+    nextBtn.classList.add("hidden");
+    skipBtn.classList.remove("hidden");
+    counterLine.textContent = `Card ${index + 1} / ${total}`;
+
+    const c = queue[index];
+    apiGet(`/api/drill/card/${c.game_id}/${c.ply}`).then((card) => {
+      contextLine.textContent = `You are ${card.my_colour}. Originally played: ${card.original_san} `
+        + `(a mistake/blunder, rep #${card.reps + 1}). Find the better move.`;
+
+      const userColor = card.my_colour;
+      const startTime = Date.now();
+      let legalMoves = card.legal_moves;
+
+      boardWrap.innerHTML = "";
+      const cg = Chessground(boardWrap, {
+        fen: card.fen_before,
+        orientation: userColor,
+        coordinates: true,
+        turnColor: userColor,
+        movable: { free: false, color: userColor, dests: buildDests(legalMoves), events: { after: onMove } },
+      });
+
+      async function onMove(orig, dest) {
+        let promo = null;
+        if (needsPromotion(legalMoves, orig, dest)) promo = await pickPromotion();
+        const uci = orig + dest + (promo || "");
+        const seconds_spent = (Date.now() - startTime) / 1000;
+
+        cg.set({ movable: { color: undefined, dests: new Map() } }); // lock while grading
+        let result;
+        try {
+          result = await apiPost(`/api/drill/review/${c.game_id}/${c.ply}`, { uci, seconds_spent });
+        } catch (e) {
+          cg.set({ movable: { color: userColor, dests: buildDests(legalMoves) } });
+          alert(String(e));
+          return;
+        }
+
+        const good = result.rating === "Good" || result.rating === "Easy";
+        resultLine.style.color = good ? "var(--good)" : "var(--danger)";
+        resultLine.textContent = good
+          ? `${result.rating}! ${result.user_san} matches or nearly matches the engine's top choice, ${result.best_move_san}.`
+          : `${result.rating}. Best was ${result.best_move_san}; ${result.user_san} wasn't close enough.`;
+
+        cg.set({
+          drawable: {
+            autoShapes: [{
+              orig: result.best_move_uci.slice(0, 2), dest: result.best_move_uci.slice(2, 4), brush: "blue",
+            }],
+          },
+        });
+
+        skipBtn.classList.add("hidden");
+        nextBtn.classList.remove("hidden");
+      }
+    });
+  }
+
+  function advance() {
+    index++;
+    if (index >= total) {
+      root.appendChild(el("div", { class: "panel" }, [
+        el("p", {}, "Session done."),
+        el("div", { class: "btn-row" }, [
+          el("button", { class: "primary", onclick: () => navigate("#/lessons") }, "Back to curriculum"),
+        ]),
+      ]));
+      return;
+    }
+    loadCard();
+  }
+
+  skipBtn.addEventListener("click", advance);
+  nextBtn.addEventListener("click", advance);
+
+  loadCard();
 }

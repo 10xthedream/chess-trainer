@@ -369,11 +369,10 @@ LESSONS = [
         id="u7-03", unit=7, seq=3,
         title="King safety in the middlegame",
         objective=(
-            "Review lesson. Filter your flagged positions to the 'king_safety' tag, or "
-            "just scan middlegame blunders for moves right before a mating attack. The "
-            "question isn't only 'did I hang a piece' - it's 'did I leave my king "
+            "The question isn't only 'did I hang a piece' - it's 'did I leave my king "
             "somewhere that made ANY tactic dangerous.' That's a structural problem, "
-            "not a one-move fix."
+            "not a one-move fix. Drill the positions where the auto-tagger caught this "
+            "below - real moves from your own games, not a manual review."
         ),
         start_fen=None, exercise_type="concept",
     ),
@@ -394,12 +393,11 @@ LESSONS = [
         id="u8-01", unit=8, seq=1,
         title="Development tempo — count your wasted opening moves",
         objective=(
-            "Review lesson. Pull 5 of your own opening-phase games and count how many "
-            "of your first 10-12 moves actually developed a new piece or fought for the "
-            "center, versus moves that repositioned a piece you'd already moved, "
-            "grabbed a flank pawn, or reacted to a threat that didn't need reacting to. "
-            "Every non-developing move in the opening is a tempo your opponent gets "
-            "for free."
+            "A non-developing move in the opening - repositioning a piece you'd "
+            "already moved, grabbing a flank pawn, reacting to a threat that didn't "
+            "need reacting to - is a tempo your opponent gets for free. Drill the "
+            "positions where the auto-tagger actually caught you doing this below, "
+            "instead of manually combing through your own games for examples."
         ),
         start_fen=None, exercise_type="concept",
     ),
@@ -419,10 +417,10 @@ LESSONS = [
         id="u8-03", unit=8, seq=3,
         title="King safety in the opening — castle before you attack",
         objective=(
-            "Review lesson. Look at your opening-phase blunders tagged 'king_safety' "
-            "or involving a king that hadn't castled yet. The single most common "
-            "700-level opening mistake isn't a specific trap - it's playing for an "
-            "attack or grabbing material before your own king has castled."
+            "The single most common 700-level opening mistake isn't a specific trap "
+            "- it's playing for an attack or grabbing material before your own king "
+            "has castled. Drill the opening-phase positions tagged 'king_safety' "
+            "below - your own games, not a textbook."
         ),
         start_fen=None, exercise_type="concept",
     ),

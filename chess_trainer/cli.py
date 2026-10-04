@@ -119,11 +119,18 @@ def cmd_drill_build() -> None:
 
 
 def cmd_drill() -> None:
-    eco = sys.argv[2] if len(sys.argv) > 2 else None
+    eco = tag = None
+    for arg in sys.argv[2:]:
+        if arg.startswith("--tag="):
+            tag = arg.split("=", 1)[1]
+        elif arg.startswith("--eco="):
+            eco = arg.split("=", 1)[1]
+        else:
+            eco = arg
     config = load_config()
     init_db(config.db_path, default_username=config.chesscom_username)
     with get_conn(config.db_path) as conn:
-        drill.drill_session(conn, config, eco=eco)
+        drill.drill_session(conn, config, eco=eco, tag=tag)
 
 
 def cmd_opening_report() -> None:
