@@ -530,6 +530,7 @@ async function renderLesson(lessonId) {
       cg.set({
         fen: currentFen,
         lastMove,
+        turnColor: userColor,
         movable: { color: userColor, dests: buildDests(legalMoves) },
       });
 
@@ -543,7 +544,7 @@ async function renderLesson(lessonId) {
     } catch (e) {
       // Shouldn't normally happen - chessground's dests already constrain to
       // legal moves - but revert cleanly if the server disagrees anyway.
-      cg.set({ fen: currentFen, movable: { color: userColor, dests: buildDests(legalMoves) } });
+      cg.set({ fen: currentFen, turnColor: userColor, movable: { color: userColor, dests: buildDests(legalMoves) } });
       alert(String(e));
     }
   }
