@@ -1,0 +1,144 @@
+:root {
+  --bg: #f7f5f2;
+  --panel: #ffffff;
+  --text: #1a1a1a;
+  --muted: #6b6b6b;
+  --border: #ddd8d0;
+  --accent: #2563eb;
+  --accent-text: #ffffff;
+  --chip-bg: #eee;
+  --chip-selected-bg: #2563eb;
+  --chip-selected-text: #ffffff;
+  --danger: #b91c1c;
+  --good: #15803d;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15171c;
+    --panel: #1e2127;
+    --text: #e8e6e3;
+    --muted: #9a9a9a;
+    --border: #33363d;
+    --accent: #3b82f6;
+    --accent-text: #0a0a0a;
+    --chip-bg: #2a2d33;
+    --chip-selected-bg: #3b82f6;
+    --chip-selected-text: #0a0a0a;
+    --danger: #f87171;
+    --good: #4ade80;
+    color-scheme: dark;
+  }
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-size: 15px;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+#app { max-width: 980px; margin: 0 auto; padding: 16px; }
+
+h1, h2, h3 { margin: 0 0 12px; }
+.muted { color: var(--muted); }
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+label { display: block; margin: 12px 0 4px; font-weight: 600; }
+input[type=text], input[type=number], textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+}
+textarea { min-height: 70px; resize: vertical; font-family: inherit; }
+
+button {
+  padding: 9px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 14px;
+}
+button.primary { background: var(--accent); color: var(--accent-text); border-color: var(--accent); }
+button:disabled { opacity: 0.5; cursor: default; }
+.btn-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+
+.checkbox-row { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
+.checkbox-row input { width: auto; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 8px 0; }
+.chip {
+  padding: 7px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--chip-bg);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+}
+.chip.selected { background: var(--chip-selected-bg); color: var(--chip-selected-text); border-color: var(--chip-selected-bg); }
+.chip .key { opacity: 0.6; margin-right: 4px; font-size: 11px; }
+
+.review-layout { display: flex; gap: 20px; flex-wrap: wrap; }
+.board-col { flex: 1 1 360px; min-width: 300px; max-width: 480px; }
+.form-col { flex: 1 1 320px; min-width: 280px; }
+.board-wrap { width: 100%; aspect-ratio: 1 / 1; max-width: 480px; }
+.board-wrap .cg-wrap { width: 100% !important; height: 100% !important; }
+
+/* chessground 10.x renders edge coordinates as <coords class="ranks|files">
+   containing <coord class="coord-dark"|"coord-light"> (verified against the
+   live DOM - the vendored theme CSS predates this class naming and has no
+   rules for it at all, so coordinates were inheriting plain low-opacity
+   default text: readable on light squares, nearly invisible on dark ones).
+   coord-dark/coord-light name which SQUARE the coordinate sits in (not the
+   text color to use) - so give coord-dark a light/solid color and vice versa. */
+.board-wrap coords coord {
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  opacity: 1 !important;
+}
+.board-wrap coords coord.coord-dark {
+  color: #f1e9d9 !important;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.7);
+}
+.board-wrap coords coord.coord-light {
+  color: #2a2a2a !important;
+}
+
+.progress-bar-track {
+  width: 100%; height: 8px; border-radius: 4px; background: var(--chip-bg); overflow: hidden; margin: 8px 0;
+}
+.progress-bar-fill { height: 100%; background: var(--accent); transition: width 0.2s; }
+
+.position-meta { font-size: 14px; line-height: 1.6; margin-bottom: 12px; }
+.position-meta .san { font-weight: 700; font-size: 17px; }
+.severity-blunder { color: var(--danger); font-weight: 600; }
+.severity-mistake { color: #b45309; font-weight: 600; }
+
+table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+td, th { padding: 6px 8px; border-bottom: 1px solid var(--border); text-align: left; font-size: 14px; }
+
+a { color: var(--accent); }
+
+.session-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.session-row:last-child { border-bottom: none; }
+
+@media (max-width: 700px) {
+  .review-layout { flex-direction: column; }
+  .board-col, .form-col { max-width: 100%; }
+}

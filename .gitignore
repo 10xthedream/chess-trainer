@@ -1,0 +1,11 @@
+.env
+*.db
+*.db-journal
+*.db.bak-*
+__pycache__/
+*.pyc
+.venv/
+venv/
+logs/
+stockfish/
+desktop.ini
