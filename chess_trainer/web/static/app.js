@@ -50,6 +50,8 @@ function parseHash() {
   if (parts[0] === "s" && parts[2] === "progress") return { screen: "progress", sessionId: +parts[1] };
   if (parts[0] === "s" && parts[2] === "review") return { screen: "review", sessionId: +parts[1] };
   if (parts[0] === "s" && parts[2] === "summary") return { screen: "summary", sessionId: +parts[1] };
+  if (parts[0] === "lessons" && parts.length === 1) return { screen: "lessons" };
+  if (parts[0] === "lessons" && parts.length === 2) return { screen: "lesson", lessonId: parts[1] };
   return { screen: "start" };
 }
 
@@ -83,6 +85,8 @@ async function render() {
     else if (route.screen === "progress") await renderProgress(route.sessionId);
     else if (route.screen === "review") await renderReview(route.sessionId);
     else if (route.screen === "summary") await renderSummary(route.sessionId);
+    else if (route.screen === "lessons") await renderLessons();
+    else if (route.screen === "lesson") await renderLesson(route.lessonId);
   } catch (e) {
     root.innerHTML = "";
     root.appendChild(el("div", { class: "panel" }, [
@@ -108,6 +112,9 @@ async function renderStart() {
   const sevInaccuracy = el("input", { type: "checkbox", id: "sev_inaccuracy" });
 
   const startPanel = el("div", { class: "panel" }, [
+    el("div", { class: "btn-row", style: "margin-top:0" }, [
+      el("button", { onclick: () => navigate("#/lessons") }, "Curriculum →"),
+    ]),
     el("h1", {}, "Chess Trainer: Review"),
     el("p", { class: "muted" }, `Time class: ${config.time_class}. Reviews pull your flagged moves and let you label what went wrong.`),
     el("label", { for: "username" }, "Chess.com username"),
@@ -385,4 +392,165 @@ async function renderSummary(sessionId) {
   root.appendChild(el("div", { class: "btn-row" }, [
     el("button", { class: "primary", onclick: () => navigate("#/start") }, "Review more"),
   ]));
+}
+
+// --- Screen 5: Curriculum - lesson list ---------------------------------------
+
+async function renderLessons() {
+  const lessons = await apiGet("/api/lessons");
+  root.innerHTML = "";
+  root.appendChild(el("div", { class: "panel" }, [
+    el("div", { class: "btn-row", style: "margin-top:0" }, [
+      el("button", { onclick: () => navigate("#/start") }, "← Review"),
+    ]),
+    el("h1", {}, "Curriculum"),
+  ]));
+
+  const STATUS_LABEL = { concept: "Review lesson" };
+  let currentUnit = null;
+  let unitPanel = null;
+  for (const l of lessons) {
+    if (l.unit !== currentUnit) {
+      currentUnit = l.unit;
+      unitPanel = el("div", { class: "panel" }, [el("h3", {}, `Unit ${l.unit}: ${l.unit_name}`)]);
+      root.appendChild(unitPanel);
+    }
+    const badge = l.exercise_type === "tablebase_dtz" ? l.target_result : (STATUS_LABEL[l.exercise_type] || l.exercise_type);
+    unitPanel.appendChild(el("div", { class: "session-row" }, [
+      el("span", {}, l.title),
+      el("button", { onclick: () => navigate(`#/lessons/${l.id}`) }, badge),
+    ]));
+  }
+}
+
+// --- Screen 6: Curriculum - practice a lesson ---------------------------------
+
+const PROMO_PIECES = [["q", "Queen"], ["r", "Rook"], ["b", "Bishop"], ["n", "Knight"]];
+
+function buildDests(legalMoves) {
+  const dests = new Map();
+  for (const uci of legalMoves) {
+    const orig = uci.slice(0, 2), dest = uci.slice(2, 4);
+    if (!dests.has(orig)) dests.set(orig, []);
+    if (!dests.get(orig).includes(dest)) dests.get(orig).push(dest);
+  }
+  return dests;
+}
+function needsPromotion(legalMoves, orig, dest) {
+  return legalMoves.some((u) => u.length === 5 && u.slice(0, 2) === orig && u.slice(2, 4) === dest);
+}
+
+async function renderLesson(lessonId) {
+  const lesson = await apiGet(`/api/lessons/${lessonId}`);
+  root.innerHTML = "";
+
+  root.appendChild(el("div", { class: "panel" }, [
+    el("div", { class: "btn-row", style: "margin-top:0" }, [
+      el("button", { onclick: () => navigate("#/lessons") }, "← Curriculum"),
+    ]),
+    el("h2", {}, lesson.title),
+    el("p", { class: "muted" }, `Unit ${lesson.unit}: ${lesson.unit_name}`),
+    el("p", {}, lesson.objective),
+  ]));
+
+  if (lesson.exercise_type !== "tablebase_dtz") {
+    return; // review/concept lesson - the objective text above is the whole lesson
+  }
+
+  let currentFen = lesson.start_fen;
+  let legalMoves = lesson.legal_moves;
+  let movesSoFar = [];
+  const userColor = lesson.user_is_white ? "white" : "black";
+
+  const statusLine = el("div", { class: "position-meta" }, `Theoretical result: ${lesson.target_result} for you. Your move.`);
+  const moveLog = el("div", { class: "muted" }, "");
+  const boardWrap = el("div", { class: "board-wrap" });
+  const promoWrap = el("div", { class: "promo-picker hidden" });
+  const resignBtn = el("button", {}, "Resign");
+  const actionsRow = el("div", { class: "btn-row" }, [resignBtn]);
+
+  root.appendChild(el("div", { class: "review-layout" }, [
+    el("div", { class: "board-col" }, [boardWrap, promoWrap]),
+    el("div", { class: "form-col" }, [statusLine, moveLog, actionsRow]),
+  ]));
+
+  const cg = Chessground(boardWrap, {
+    fen: currentFen,
+    orientation: userColor,
+    coordinates: true,
+    turnColor: userColor,
+    movable: {
+      free: false,
+      color: userColor,
+      dests: buildDests(legalMoves),
+      events: { after: onUserMove },
+    },
+  });
+
+  function pickPromotion() {
+    return new Promise((resolve) => {
+      promoWrap.innerHTML = "";
+      promoWrap.classList.remove("hidden");
+      for (const [code, label] of PROMO_PIECES) {
+        promoWrap.appendChild(el("button", {
+          onclick: () => { promoWrap.classList.add("hidden"); resolve(code); },
+        }, label));
+      }
+    });
+  }
+
+  function setDone(result) {
+    cg.set({ movable: { color: undefined, dests: new Map() } });
+    actionsRow.innerHTML = "";
+    statusLine.style.color = result.passed ? "var(--good)" : "var(--danger)";
+    statusLine.textContent = result.passed
+      ? `PASS — result was ${result.final_result}, target was ${result.target_result}.`
+      : `Not this time — result was ${result.final_result}, target was ${result.target_result}.`;
+    actionsRow.appendChild(el("button", { class: "primary", onclick: () => renderLesson(lessonId) }, "Try again"));
+    actionsRow.appendChild(el("button", { onclick: () => navigate("#/lessons") }, "Back to curriculum"));
+  }
+
+  async function onUserMove(orig, dest) {
+    let promo = null;
+    if (needsPromotion(legalMoves, orig, dest)) promo = await pickPromotion();
+    const uci = orig + dest + (promo || "");
+
+    try {
+      const result = await apiPost(`/api/lessons/${lessonId}/move`, {
+        fen: currentFen, uci, moves_so_far: movesSoFar,
+      });
+      currentFen = result.fen;
+      legalMoves = result.legal_moves;
+      movesSoFar = result.moves;
+      moveLog.textContent = movesSoFar.join(" ");
+
+      const lastMove = result.opponent_uci
+        ? [result.opponent_uci.slice(0, 2), result.opponent_uci.slice(2, 4)]
+        : [orig, dest];
+      cg.set({
+        fen: currentFen,
+        lastMove,
+        movable: { color: userColor, dests: buildDests(legalMoves) },
+      });
+
+      statusLine.textContent = result.opponent_san
+        ? `Opponent played ${result.opponent_san}. Your move.`
+        : statusLine.textContent;
+      if (result.drifted && !result.game_over) {
+        statusLine.textContent += ` (Position has drifted to a theoretical ${result.current_target} for you.)`;
+      }
+      if (result.game_over) setDone(result);
+    } catch (e) {
+      // Shouldn't normally happen - chessground's dests already constrain to
+      // legal moves - but revert cleanly if the server disagrees anyway.
+      cg.set({ fen: currentFen, movable: { color: userColor, dests: buildDests(legalMoves) } });
+      alert(String(e));
+    }
+  }
+
+  resignBtn.addEventListener("click", async () => {
+    if (!confirm("Resign this lesson attempt?")) return;
+    const result = await apiPost(`/api/lessons/${lessonId}/resign`, { moves_so_far: movesSoFar });
+    setDone(result);
+  });
 }

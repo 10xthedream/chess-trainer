@@ -17,7 +17,9 @@ import chess
 from . import tablebase
 from .curriculum_data import LESSONS, UNIT_NAMES
 
-_INVERSE = {"win": "loss", "loss": "win", "draw": "draw"}
+# Public: also used by chess_trainer/web/practice.py (the web curriculum-practice
+# screen reuses this exact logic rather than reimplementing it).
+RESULT_INVERSE = {"win": "loss", "loss": "win", "draw": "draw"}
 
 
 def ingest_lessons(conn: sqlite3.Connection, verbose: bool = True) -> list[str]:
@@ -109,7 +111,7 @@ def _print_board(board: chess.Board) -> None:
     print()
 
 
-def _final_result_for_user(board: chess.Board, user_is_white: bool, resigned: bool) -> str:
+def final_result_for_user(board: chess.Board, user_is_white: bool, resigned: bool) -> str:
     if resigned:
         return "loss"
     if board.is_checkmate():
@@ -177,20 +179,29 @@ def practice_lesson(conn: sqlite3.Connection, lesson_id: str) -> None:
 
         _print_board(board)
 
-        # Live feedback: has the achievable result for the user changed?
+        # Live feedback: has the achievable result for the user changed? Only
+        # invert when the side to move is the opponent (i.e. the user just
+        # moved) - when it's the user's own turn (opponent just moved),
+        # result_for_side_to_move already IS the user's result, and inverting
+        # it anyway was a real bug: it falsely flagged "drifted to a loss" on
+        # some obviously-still-winning positions (caught via the web UI's
+        # identical logic, same bug, ported here).
         try:
-            opp_result = tablebase.result_for_side_to_move(board.fen())
+            side_to_move_result = tablebase.result_for_side_to_move(board.fen())
         except tablebase.TablebaseUnavailable:
-            opp_result = None
-        if opp_result is not None:
-            current_user_result = _INVERSE[opp_result]
+            side_to_move_result = None
+        if side_to_move_result is not None:
+            its_users_turn = (board.turn == chess.WHITE) == user_is_white
+            current_user_result = (
+                side_to_move_result if its_users_turn else RESULT_INVERSE[side_to_move_result]
+            )
             if current_user_result != target_result:
                 print(
                     f"  [!] The position has drifted from a theoretical '{target_result}' "
                     f"to a theoretical '{current_user_result}' for you."
                 )
 
-    final_result = _final_result_for_user(board, user_is_white, resigned)
+    final_result = final_result_for_user(board, user_is_white, resigned)
     passed = final_result == target_result
     print(f"\n{'PASS' if passed else 'FAIL'} - final result: {final_result}, target was: {target_result}")
 

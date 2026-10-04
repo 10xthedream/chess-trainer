@@ -14,7 +14,7 @@ from pydantic import BaseModel, field_validator
 
 from ..config import load_config
 from ..db import get_conn, init_db
-from . import jobs, queries
+from . import jobs, practice, queries
 
 STATIC_DIR = Path(__file__).parent / "static"
 
@@ -45,6 +45,16 @@ class CreateSessionRequest(BaseModel):
         if not (1 <= v <= 50):
             raise ValueError("n_games must be between 1 and 50")
         return v
+
+
+class PracticeMoveRequest(BaseModel):
+    fen: str
+    uci: str
+    moves_so_far: list[str] = []
+
+
+class PracticeResignRequest(BaseModel):
+    moves_so_far: list[str] = []
 
 
 class LabelRequest(BaseModel):
@@ -140,6 +150,43 @@ def api_save_label(game_id: int, ply: int, req: LabelRequest):
             req.session_id, req.seconds_spent,
         )
     return {"ok": True}
+
+
+@app.get("/api/lessons")
+def api_lessons():
+    config = _config()
+    with get_conn(config.db_path) as conn:
+        return practice.list_lessons(conn)
+
+
+@app.get("/api/lessons/{lesson_id}")
+def api_lesson_detail(lesson_id: str):
+    config = _config()
+    with get_conn(config.db_path) as conn:
+        detail = practice.lesson_detail(conn, lesson_id)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="No such lesson.")
+    return detail
+
+
+@app.post("/api/lessons/{lesson_id}/move")
+def api_lesson_move(lesson_id: str, req: PracticeMoveRequest):
+    config = _config()
+    with get_conn(config.db_path) as conn:
+        try:
+            return practice.apply_move(conn, lesson_id, req.fen, req.uci, req.moves_so_far)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/lessons/{lesson_id}/resign")
+def api_lesson_resign(lesson_id: str, req: PracticeResignRequest):
+    config = _config()
+    with get_conn(config.db_path) as conn:
+        try:
+            return practice.resign(conn, lesson_id, req.moves_so_far)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.get("/api/sessions/{session_id}/summary")

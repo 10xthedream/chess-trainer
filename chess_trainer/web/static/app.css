@@ -138,6 +138,9 @@ a { color: var(--accent); }
 .session-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); }
 .session-row:last-child { border-bottom: none; }
 
+.promo-picker { display: flex; gap: 8px; justify-content: center; margin-top: 10px; }
+.promo-picker.hidden { display: none; }
+
 @media (max-width: 700px) {
   .review-layout { flex-direction: column; }
   .board-col, .form-col { max-width: 100%; }

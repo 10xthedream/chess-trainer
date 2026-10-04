@@ -66,8 +66,16 @@ Endgame curriculum:
 ```
 python -m chess_trainer.cli curriculum-ingest           # load + tablebase-verify lessons
 python -m chess_trainer.cli curriculum-list              # see what's available
-python -m chess_trainer.cli curriculum-practice <id>      # play one out, e.g. u1-01
+python -m chess_trainer.cli curriculum-practice <id>      # play one out via CLI (plain ASCII board)
 ```
+
+For a real board, use the web app (`python -m chess_trainer.web`) and click
+**Curriculum** on the start screen. Tablebase-graded lessons (Units 1-5) are
+fully interactive - drag or click-to-move, same legal-move highlighting as a
+normal chess site - via the vendored chessground board, with the opponent's
+replies and pass/fail grading computed server-side against the live Lichess
+tablebase (same logic as the CLI's `curriculum-practice`, not reimplemented).
+Review-lesson units (6-8) just show their text.
 
 Own-blunder drill loop (FSRS):
 
