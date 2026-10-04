@@ -76,6 +76,21 @@ def ingest_lessons(conn: sqlite3.Connection, verbose: bool = True) -> list[str]:
             status = target_result or exercise_type
             print(f"  {lesson['id']:12} {lesson['title']:55} -> {status}")
 
+    # Prune lessons that no longer appear in LESSONS (e.g. a roadmap placeholder
+    # replaced by real content under a new id) - upsert alone would leave the
+    # old row behind forever. Drop any progress history for a pruned id first,
+    # since lesson_progress.lesson_id has no ON DELETE CASCADE.
+    current_ids = {lesson["id"] for lesson in LESSONS}
+    stale_ids = [
+        row["id"] for row in conn.execute("SELECT id FROM lessons").fetchall()
+        if row["id"] not in current_ids
+    ]
+    for stale_id in stale_ids:
+        conn.execute("DELETE FROM lesson_progress WHERE lesson_id = ?", (stale_id,))
+        conn.execute("DELETE FROM lessons WHERE id = ?", (stale_id,))
+        if verbose and stale_id:
+            print(f"  {stale_id:12} (removed - no longer in curriculum_data.py)")
+
     conn.commit()
     return warnings
 
