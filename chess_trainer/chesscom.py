@@ -73,11 +73,17 @@ def sync_games(
     month oldest-first as before, unchanged."""
     stats = FetchStats()
     headers = {"User-Agent": config.user_agent}
+    # chess.com's API 301-redirects any mixed-case username to lowercase, and
+    # httpx doesn't follow redirects by default - lowercase up front rather
+    # than special-casing that response. Matters once usernames start coming
+    # from other games' PGN headers (population.py) instead of a hand-typed
+    # .env value, which is normally already lowercase.
+    username = config.chesscom_username.lower()
 
     with httpx.Client(timeout=30.0) as client:
         archives_resp = _request_with_backoff(
             client,
-            f"{BASE_URL}/player/{config.chesscom_username}/games/archives",
+            f"{BASE_URL}/player/{username}/games/archives",
             headers,
         )
         archives_resp.raise_for_status()
@@ -87,13 +93,20 @@ def sync_games(
 
         for archive_url in archive_urls:
             if max_games is not None:
+                # Scoped to THIS username - not scoping this was a real bug,
+                # harmless for the single-user review-app case this was built
+                # for (only one username was ever in the table), but it broke
+                # population.py outright: once the DB already had >= max_games
+                # rapid games from anyone, every subsequent new username's
+                # sync stopped before checking a single archive.
                 have = conn.execute(
-                    "SELECT COUNT(*) FROM games WHERE time_class = ?",
-                    (config.time_class,),
+                    "SELECT COUNT(*) FROM games WHERE time_class = ? AND chesscom_username = ?",
+                    (config.time_class, username),
                 ).fetchone()[0]
                 if have >= max_games:
                     break
             stats.archives_checked += 1
+            stop_after_this_archive = False
             row = conn.execute(
                 "SELECT etag FROM archive_sync WHERE archive_url = ?", (archive_url,)
             ).fetchone()
@@ -112,10 +125,23 @@ def sync_games(
 
             new_etag = resp.headers.get("ETag")
             games = resp.json().get("games", [])
+            if max_games is not None:
+                # chess.com returns a month's games oldest-first; take the
+                # most recent ones first here too, not just across months -
+                # otherwise one active month blows straight through the cap
+                # (this was a real bug: asking for 3 games could pull all 25+
+                # from a single busy month, since nothing capped mid-archive).
+                games = list(reversed(games))
+
             for game in games:
                 stats.games_seen += 1
                 if _insert_game(conn, config, game):
                     stats.games_inserted += 1
+                    if max_games is not None and game.get("time_class") == config.time_class:
+                        have += 1
+                        if have >= max_games:
+                            stop_after_this_archive = True
+                            break
 
             conn.execute(
                 """
@@ -127,6 +153,8 @@ def sync_games(
                 (archive_url, new_etag, datetime.now(timezone.utc).isoformat()),
             )
             conn.commit()
+            if stop_after_this_archive:
+                break
 
     return stats
 
@@ -160,8 +188,8 @@ def _insert_game(conn: sqlite3.Connection, config: Config, game: dict) -> bool:
     conn.execute(
         """
         INSERT INTO games (chesscom_uuid, played_at, time_class, my_colour, result,
-                            my_rating, opp_rating, eco, pgn, analysed_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+                            my_rating, opp_rating, eco, pgn, analysed_at, chesscom_username)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
         """,
         (
             uuid,
@@ -173,6 +201,7 @@ def _insert_game(conn: sqlite3.Connection, config: Config, game: dict) -> bool:
             opp_side.get("rating"),
             eco,
             game.get("pgn", ""),
+            username_lower,
         ),
     )
     return True

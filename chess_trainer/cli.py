@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import sys
 
-from . import chesscom, curriculum, drill, opening_report, report, tag_runner
+from . import chesscom, curriculum, drill, opening_report, population, report, tag_runner
 from .analyze import analyze_pending_games
 from .config import load_config
 from .db import get_conn, init_db
@@ -147,6 +147,39 @@ def cmd_opening_report() -> None:
     print(f"Opening report written to:\n  {out_path}")
 
 
+def cmd_population_build() -> None:
+    n_opponents = int(sys.argv[2]) if len(sys.argv) > 2 else 50
+    games_per_opponent = int(sys.argv[3]) if len(sys.argv) > 3 else 15
+    config = load_config()
+    init_db(config.db_path, default_username=config.chesscom_username)
+    with get_conn(config.db_path) as conn:
+        opponents = population.discover_opponents(conn, config.chesscom_username, limit=n_opponents)
+        print(f"Found {len(opponents)} unique opponents from your last {n_opponents} games.")
+
+        def progress(i, total, username):
+            print(f"  [{i}/{total}] {username}")
+
+        stats = population.build_sample(conn, config, opponents, games_per_opponent=games_per_opponent, on_progress=progress)
+    print(
+        f"\nDone: {stats['opponents_done']} opponents processed, "
+        f"{stats['games_synced']} games synced, {stats['games_analyzed']} analyzed."
+    )
+    if stats["errors"]:
+        print(f"\n{len(stats['errors'])} error(s):")
+        for e in stats["errors"]:
+            print(f"  - {e}")
+
+
+def cmd_population_report() -> None:
+    n_opponents = int(sys.argv[2]) if len(sys.argv) > 2 else 50
+    config = load_config()
+    init_db(config.db_path, default_username=config.chesscom_username)
+    with get_conn(config.db_path) as conn:
+        opponents = population.discover_opponents(conn, config.chesscom_username, limit=n_opponents)
+        out_path = population.write_population_report_markdown(conn, config, opponents, config.time_class)
+    print(f"Population report written to:\n  {out_path}")
+
+
 COMMANDS = {
     "fetch": cmd_fetch,
     "analyze": cmd_analyze,
@@ -159,6 +192,8 @@ COMMANDS = {
     "drill-build": cmd_drill_build,
     "drill": cmd_drill,
     "opening-report": cmd_opening_report,
+    "population-build": cmd_population_build,
+    "population-report": cmd_population_report,
 }
 
 
@@ -169,6 +204,8 @@ def main() -> None:
         print("       python -m chess_trainer.cli drill-build [eco]")
         print("       python -m chess_trainer.cli drill [eco]")
         print("       python -m chess_trainer.cli opening-report <eco> [colour]")
+        print("       python -m chess_trainer.cli population-build [n_opponents] [games_per_opponent]")
+        print("       python -m chess_trainer.cli population-report [n_opponents]")
         sys.exit(1)
     COMMANDS[sys.argv[1]]()
 
