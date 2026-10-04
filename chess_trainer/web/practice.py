@@ -146,3 +146,21 @@ def resign(conn: sqlite3.Connection, lesson_id: str, moves_so_far: list[str]) ->
         raise ValueError(f"No such lesson: {lesson_id}")
     _log_attempt(conn, lesson_id, False, moves_so_far)
     return {"final_result": "loss", "target_result": lesson["target_result"], "passed": False}
+
+
+def hint(conn: sqlite3.Connection, lesson_id: str, fen: str) -> dict:
+    """The tablebase's best move from the given (user's-turn) position, for
+    a 'Hint' button - shown as an arrow, not auto-played, so the user still
+    has to find and make the move themselves."""
+    lesson = get_lesson(conn, lesson_id)
+    if lesson is None:
+        raise ValueError(f"No such lesson: {lesson_id}")
+    if lesson["exercise_type"] != "tablebase_dtz":
+        raise ValueError("This lesson isn't a graded play-it-out exercise.")
+
+    board = chess.Board(fen)
+    uci = tablebase.best_move_uci(fen)
+    if uci is None:
+        raise ValueError("No tablebase move available for this position.")
+    move = chess.Move.from_uci(uci)
+    return {"uci": uci, "san": board.san(move)}

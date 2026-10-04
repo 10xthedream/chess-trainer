@@ -189,6 +189,16 @@ def api_lesson_resign(lesson_id: str, req: PracticeResignRequest):
             raise HTTPException(status_code=400, detail=str(exc))
 
 
+@app.get("/api/lessons/{lesson_id}/hint")
+def api_lesson_hint(lesson_id: str, fen: str):
+    config = _config()
+    with get_conn(config.db_path) as conn:
+        try:
+            return practice.hint(conn, lesson_id, fen)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.get("/api/sessions/{session_id}/summary")
 def api_summary(session_id: int):
     config = _config()

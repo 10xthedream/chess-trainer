@@ -467,7 +467,8 @@ async function renderLesson(lessonId) {
   const boardWrap = el("div", { class: "board-wrap" });
   const promoWrap = el("div", { class: "promo-picker hidden" });
   const resignBtn = el("button", {}, "Resign");
-  const actionsRow = el("div", { class: "btn-row" }, [resignBtn]);
+  const hintBtn = el("button", {}, "Hint");
+  const actionsRow = el("div", { class: "btn-row" }, [hintBtn, resignBtn]);
 
   root.appendChild(el("div", { class: "review-layout" }, [
     el("div", { class: "board-col" }, [boardWrap, promoWrap]),
@@ -532,7 +533,9 @@ async function renderLesson(lessonId) {
         lastMove,
         turnColor: userColor,
         movable: { color: userColor, dests: buildDests(legalMoves) },
+        drawable: { autoShapes: [] }, // clear any leftover hint arrow
       });
+      hintBtn.textContent = "Hint";
 
       statusLine.textContent = result.opponent_san
         ? `Opponent played ${result.opponent_san}. Your move.`
@@ -553,5 +556,17 @@ async function renderLesson(lessonId) {
     if (!confirm("Resign this lesson attempt?")) return;
     const result = await apiPost(`/api/lessons/${lessonId}/resign`, { moves_so_far: movesSoFar });
     setDone(result);
+  });
+
+  hintBtn.addEventListener("click", async () => {
+    try {
+      const { uci, san } = await apiGet(`/api/lessons/${lessonId}/hint?fen=${encodeURIComponent(currentFen)}`);
+      cg.set({
+        drawable: { autoShapes: [{ orig: uci.slice(0, 2), dest: uci.slice(2, 4), brush: "blue" }] },
+      });
+      hintBtn.textContent = `Hint: ${san} (click again to re-show)`;
+    } catch (e) {
+      alert(String(e));
+    }
   });
 }
