@@ -80,8 +80,8 @@ Review-lesson units (6-8) just show their text.
 Own-blunder drill loop (FSRS):
 
 ```
-python -m chess_trainer.cli drill-build   # turn newly flagged blunders/mistakes into cards
-python -m chess_trainer.cli drill         # practice whatever's due
+python -m chess_trainer.cli drill-build [eco]   # turn newly flagged blunders/mistakes into cards
+python -m chess_trainer.cli drill [eco]         # practice whatever's due
 ```
 
 `drill-build` computes the engine's best move for each new flagged position once,
@@ -90,6 +90,20 @@ you'd play now, and it's graded by win%-drop vs. the stored best move: within 5%
 Good (Easy if solved in under 5s on a card's first rep), 5-15% is Hard, 15%+ (i.e.
 you made another blunder-tier move) is Again. FSRS (the `fsrs` package) schedules
 the next review from there - run `drill` whenever, due cards show up automatically.
+Both commands take an optional ECO code (e.g. `C45` for the Scotch) to build/review
+a deck scoped to one opening instead of your whole history at once.
+
+Opening-pattern report (not a repertoire trainer - that's explicitly out of scope,
+see the plan doc):
+
+```
+python -m chess_trainer.cli opening-report <eco> [colour]   # e.g. C45 white
+```
+
+Answers "what do my actual opponents play against me, and how have I scored
+against each line" from your own games - plus every flagged blunder/mistake from
+games you lost in that opening, with its root-cause tags. Writes to the vault
+like the weekly report does (`chess-trainer-opening-report-<eco>.md`).
 
 ## Review app (labeling your own blunders)
 
